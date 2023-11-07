@@ -1,0 +1,771 @@
+# libraries
+
+```{r}
+library(dplyr)
+library(skimr)
+library(ggplot2)
+library(tidyverse)
+library(car)
+library(broom)
+library(ggcorrplot)
+library(caret)
+library(randomForest)
+library(ipred)
+library(stringr)
+library(forcats)
+```
+
+# reading
+
+```{r}
+train_data <- read.csv("/Users/ishujaswani/Downloads/Columbia_Courses/App Frameworks 1/Final project/Spotify_PAC/analysisData.csv")
+test_data <- read.csv("/Users/ishujaswani/Downloads/Columbia_Courses/App Frameworks 1/Final project/Spotify_PAC/scoringData.csv")
+```
+
+# data transformation
+
+```{r}
+library(stringr)
+
+# train data genre column splits to 1 and 0
+
+train_data$genre<- gsub("\\[|\\]","",as.character(train_data$genre))
+train_data$genre <- ifelse(train_data$genre == "","No_Genre", train_data$genre)
+train_data$genre <- ifelse(is.na(train_data$genre),"No_Genre", train_data$genre)
+
+#train_data <- na.omit(train_data)
+(cols <- unique(unlist(strsplit(train_data$genre, ","))))
+cols <- gsub("[[:punct:]]", "", cols)
+(cols <- str_trim(cols,side = "both"))
+for (i in cols) train_data[[i]] <- grepl(i, train_data$genre)
+
+train_data_1 <- train_data[,-c(1:19)]
+train_data_1 <- ifelse(train_data_1 == "TRUE", 1, 0)
+
+# selecting cols sorting to get top 6 most frequnt genres
+(col_sums_train <- apply(X = train_data_1,2,sum))
+sort(col_sums_train,decreasing = TRUE)
+
+# binding the top 6 data columns
+train_data_1 <- train_data_1[,c("pop","rock","mellow gold","soul","rap","soft rock","adult standards","country","dance pop","brill building pop","hip hop")]
+train_data <- cbind(train_data[,c(1:19)],train_data_1)
+
+
+# test data genre column splits to 1 and 0
+test_data$genre<- gsub("\\[|\\]","",as.character(test_data$genre))
+test_data$genre <- ifelse(test_data$genre == "","No_Genre", test_data$genre)
+test_data$genre <- ifelse(is.na(test_data$genre),"No_Genre", test_data$genre)
+
+
+(cols <- unique(unlist(strsplit(test_data$genre, ","))))
+cols <- gsub("[[:punct:]]", "", cols)
+(cols <- str_trim(cols,side = "both"))
+for (i in cols) test_data[[i]] <- grepl(i, test_data$genre)
+
+test_data_1 <- test_data[,-c(1:19)]
+test_data_1 <- ifelse(test_data_1 == "TRUE", 1, 0)
+
+# selecting cols sorting to get top 6 most frequnt genres
+(col_sums_test <- apply(X = test_data_1,2,sum))
+sort(col_sums_test,decreasing = TRUE)
+
+# binding top 6 data columns
+test_data_1 <- test_data_1[,c("pop","rock","mellow gold","soul","rap","soft rock","adult standards","country","dance pop","brill building pop","hip hop")]
+test_data <- cbind(test_data[,c(1:18)],test_data_1)
+
+
+#
+
+
+
+# final data set to work with
+skimr::skim(train_data)
+
+train_data <- train_data[,-c(4,3)]
+test_data <- test_data[,-c(4,3)]
+
+train_data$track_explicit <- as.numeric(as.factor(train_data$track_explicit))
+test_data$track_explicit <- as.numeric(as.factor(test_data$track_explicit))
+
+names(train_data)[names(train_data) == "mellow gold"] <- "mellow_gold"
+names(train_data)[names(train_data) == "soft rock"] <- "soft_rock"
+names(train_data)[names(train_data) == "adult standards"] <- "adult_standards"
+names(train_data)[names(train_data) == "dance pop"] <- "dance_pop"
+names(train_data)[names(train_data) == "brill building pop"] <- "brill_building_pop"
+names(train_data)[names(train_data) == "hip hop"] <- "hip_hop"
+
+
+names(test_data)[names(test_data) == "mellow gold"] <- "mellow_gold"
+names(test_data)[names(test_data) == "soft rock"] <- "soft_rock"
+names(test_data)[names(test_data) == "adult standards"] <- "adult_standards"
+names(test_data)[names(test_data) == "dance pop"] <- "dance_pop"
+names(test_data)[names(test_data) == "brill building pop"] <- "brill_building_pop"
+names(test_data)[names(test_data) == "hip hop"] <- "hip_hop"
+
+
+
+```
+
+# split data
+
+```{r}
+split <- createDataPartition(y = train_data$rating,p = 0.5,list = F,groups = 100)
+train_s <- train_data[split,]
+test_s <- train_data[-split,]
+
+# str(train_s)
+# train_s$genre<- gsub("\\[|\\]","",as.character(train_s$genre))
+# train_s$genre <- ifelse(train_s$genre == "",NA, train_s$genre)
+# train_s <- na.omit(train_s)
+# (cols <- unique(unlist(strsplit(train_s$genre, ","))))
+# cols <- gsub("[[:punct:]]", "", cols)
+# (cols <- str_trim(cols,side = "both"))
+# for (i in cols) train_s[[i]] <- grepl(i, train_s$genre)
+# 
+# train_s_1 <- train_s[,-c(1:19)]
+# train_s_1 <- ifelse(train_s_1 == "TRUE", 1, 0)
+# 
+# train_s <- cbind(train_s[,c(1:19)],train_s_1)
+# 
+# 
+# 
+# test_s$genre<- gsub("\\[|\\]","",as.character(test_s$genre))
+# test_s$genre <- ifelse(test_s$genre == "",NA, test_s$genre)
+# test_s <- na.omit(test_s)
+# (cols <- unique(unlist(strsplit(test_s$genre, ","))))
+# cols <- gsub("[[:punct:]]", "", cols)
+# (cols <- str_trim(cols,side = "both"))
+# for (i in cols) test_s[[i]] <- grepl(i, test_s$genre)
+# 
+# test_s_1 <- test_s[,-c(1:19)]
+# test_s_1 <- ifelse(test_s_1 == "TRUE", 1, 0)
+# 
+# test_s <- cbind(test_s[,c(1:19)],test_s_1)
+```
+
+# visualisation, data exploration
+
+```{r}
+gather(data = train_data[c(3,5:17)],key = "song_info",value = "info", -rating) |>
+  ggplot(aes(x = info, y = rating)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~song_info,scales = "free")
+
+
+ggcorrplot(cor(train_data[c(3,5:28)]) , type = "lower" , show.diag = T , colors = c("red","white","green") , lab = T, lab_size = 1)
+```
+
+
+
+# regessions
+
+**taking all the variables except ID and performer as wrangling it is not making practical sense therefore would only get predictive power which would hug this model and not be generalisable to the world.**
+
+
+```{r}
+
+# model1 running a regression on data 
+model1 = lm(rating ~ track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop, data=train_s)
+summary(model1)
+# train
+pred1 <- predict(model1)
+rmse1 <- sqrt(mean((pred1-train_s$rating)^2))
+# test
+pred1_test <- predict(model1,newdata=test_s)
+rmse1_test <- sqrt(mean((pred1_test-test_s$rating)^2))
+
+
+# Subset selection will run multiple models which will overheat the laptop
+
+
+# forward selection
+start_mod = lm(rating~1,data=train_s)
+empty_mod = lm(rating~1,data=train_s)
+full_mod = lm(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data=train_s)
+forwardStepwise = step(start_mod,
+                       scope=list(upper=full_mod,lower=empty_mod),
+                       direction='forward')
+forwardStepwise
+
+# running a forward selection regression model
+model2 <- lm(formula = rating ~ dance_pop + acousticness + rap + rock + 
+    track_duration + loudness + energy + danceability + valence + 
+    mellow_gold + brill_building_pop + pop + time_signature + 
+    hip_hop + track_explicit + instrumentalness + tempo + liveness + 
+    soul + adult_standards, data = train_s)
+summary(model2)
+# train
+pred2 <- predict(model2)
+rmse2 <- sqrt(mean((pred2-train_s$rating)^2))
+# test
+pred2_test <- predict(model2,newdata=test_s)
+rmse2_test <- sqrt(mean((pred2_test-test_s$rating)^2))
+
+# backword selection
+start_mod = lm(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data=train_s)
+empty_mod = lm(rating~1,data=train_s)
+full_mod = lm(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data=train_s)
+backwardStepwise = step(start_mod,
+                        scope=list(upper=full_mod,lower=empty_mod),
+                        direction='backward')
+backwardStepwise
+
+# running backward selection regression
+model3 <- lm(formula = rating ~ track_duration + danceability + energy + 
+    track_explicit + loudness + acousticness + instrumentalness + 
+    liveness + valence + tempo + time_signature + pop + rock + 
+    mellow_gold + soul + rap + adult_standards + dance_pop + 
+    brill_building_pop + hip_hop, data = train_s)
+summary(model3)
+# train
+pred3 <- predict(model3)
+rmse3 <- sqrt(mean((pred3-train_s$rating)^2))
+# test
+pred3_test <- predict(model3,newdata=test_s)
+rmse3_test <- sqrt(mean((pred3_test-test_s$rating)^2))
+
+
+# Stepwise variable selection
+
+start_mod = lm(rating~1,data=train_s)
+empty_mod = lm(rating~1,data=train_s)
+full_mod = lm(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data=train_s)
+stepwise = step(start_mod,
+                       scope=list(upper=full_mod,lower=empty_mod),
+                       direction='both')
+stepwise
+
+model4 <- lm(formula = rating ~ dance_pop + acousticness + rap + rock + 
+    track_duration + loudness + energy + danceability + valence + 
+    mellow_gold + brill_building_pop + pop + time_signature + 
+    hip_hop + track_explicit + instrumentalness + tempo + liveness + 
+    soul + adult_standards, data = train_s)
+summary(model4)
+# train
+pred4 <- predict(model4)
+rmse4 <- sqrt(mean((pred4-train_s$rating)^2))
+# test
+pred4_test <- predict(model4,newdata=test_s)
+rmse4_test <- sqrt(mean((pred4_test-test_s$rating)^2))
+
+library(mgcv)
+model5 <- gam(formula = rating ~ dance_pop + acousticness + rap + rock + 
+    s(track_duration) + loudness + energy + danceability + valence + 
+    mellow_gold + brill_building_pop + pop + time_signature + 
+    hip_hop + track_explicit + instrumentalness + s(tempo) + liveness + 
+    soul + adult_standards, data = train_s,method = "REML") 
+summary(model5)
+# train
+pred5 <- predict(model5)
+rmse5 <- sqrt(mean((pred5-train_s$rating)^2))
+# test
+pred5_test <- predict(model5,newdata=test_s)
+rmse5_test <- sqrt(mean((pred5_test-test_s$rating)^2))
+
+
+# run a lasso regression 
+library(glmnet)
+
+x = model.matrix(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,train_s)
+y = train_s$rating
+set.seed(15)
+lasso <- cv.glmnet(x=x,y = y,alpha = 1) # lasso when alpha is 1
+coef(lasso, s = lasso$lambda.1se) %>%
+  round(4)
+
+# lasso shrinked regression
+
+model6 <- lm(rating~danceability+energy+track_explicit+loudness+acousticness+instrumentalness+liveness+valence+time_signature+pop+rock+mellow_gold+soul+rap+dance_pop+brill_building_pop,data=train_s)
+summary(model6)
+# train
+pred6 <- predict(model6)
+rmse6 <- sqrt(mean((pred6-train_s$rating)^2))
+# test
+pred6_test <- predict(model6,newdata=test_s)
+rmse6_test <- sqrt(mean((pred6_test-test_s$rating)^2))
+
+
+summary_reg <- data.frame(Name = 1:6,rmse_train = c(rmse1,rmse2,rmse3,rmse4,rmse5,rmse6), rmse_test = c(rmse1_test,rmse2_test,rmse3_test,rmse4_test,rmse5_test,rmse6_test) )
+summary_reg
+
+
+gather(data=summary_reg,key = "rmse", value= "score", -Name) |> ggplot(aes(x=Name,y=score)) + geom_point() + facet_wrap(~rmse,ncol=1)
+
+```
+
+
+# Trees
+
+```{r}
+library(rpart); library(rpart.plot)
+
+# regular trees without tuning
+model7 = rpart(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data = train_s, method = 'anova')
+summary(model7)
+# train
+pred7 <- predict(model7)
+rmse7 <- sqrt(mean((pred7-train_s$rating)^2))
+# test
+pred7_test <- predict(model7,newdata=test_s)
+rmse7_test <- sqrt(mean((pred7_test-test_s$rating)^2))
+
+# trying out some parameters
+model8 = rpart(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data = train_s, method = 'anova',control = rpart.control(minsplit = 100))
+summary(model8)
+# train
+pred8 <- predict(model8)
+rmse8 <- sqrt(mean((pred8-train_s$rating)^2))
+# test
+pred8_test <- predict(model8,newdata=test_s)
+rmse8_test <- sqrt(mean((pred8_test-test_s$rating)^2))
+
+# another one
+model9 = rpart(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data = train_s, method = 'anova',control = rpart.control(minbucket = 10))
+summary(model9)
+# train
+pred9 <- predict(model9)
+rmse9 <- sqrt(mean((pred9-train_s$rating)^2))
+# test
+pred9_test <- predict(model9,newdata=test_s)
+rmse9_test <- sqrt(mean((pred9_test-test_s$rating)^2))
+
+# another one
+model10 = rpart(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data = train_s, method = 'anova',control = rpart.control(maxdepth = 30))
+summary(model10)
+# train
+pred10 <- predict(model10)
+rmse10 <- sqrt(mean((pred10-train_s$rating)^2))
+# test
+pred10_test <- predict(model10,newdata=test_s)
+rmse10_test <- sqrt(mean((pred10_test-test_s$rating)^2))
+
+
+# another one
+model11 = rpart(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data = train_s, method = 'anova',control = rpart.control(cp = 0.00001))
+summary(model11)
+# train
+pred11 <- predict(model11)
+rmse11 <- sqrt(mean((pred11-train_s$rating)^2))
+# test
+pred11_test <- predict(model11,newdata=test_s)
+rmse11_test <- sqrt(mean((pred11_test-test_s$rating)^2))
+
+# mixing all the tunes
+
+model12 = rpart(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data = train_s, method = 'anova',control = rpart.control(cp = 0.00001,minsplit = 100,minbucket = 10,maxdepth = 30))
+summary(model12)
+# train
+pred12 <- predict(model12)
+rmse12 <- sqrt(mean((pred12-train_s$rating)^2))
+# test
+pred12_test <- predict(model12,newdata=test_s)
+rmse12_test <- sqrt(mean((pred12_test-test_s$rating)^2))
+
+
+```
+
+## TUNING TREES
+
+```{r}
+# tuning decision trees
+trControl = trainControl(method='cv',number = 5)
+tuneGrid = expand.grid(cp = seq(from = 0.001,to = 0.1,by = 0.001))
+set.seed(617)
+cvModel13 = train(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,
+                data=train_s,
+                method="rpart",
+                trControl = trControl,
+                tuneGrid = tuneGrid)
+
+model13 = rpart(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data=train_s,cp = cvModel13$bestTune$cp)
+summary(model13)
+# train
+pred13 <- predict(model13)
+rmse13 <- sqrt(mean((pred13-train_s$rating)^2))
+# test
+pred13_test <- predict(model13,newdata=test_s)
+rmse13_test <- sqrt(mean((pred13_test-test_s$rating)^2))
+
+
+
+# tuning multiple parameters for decision trees
+# 
+# trControl = trainControl(method='cv',number = 5)
+# tuneGrid = expand.grid(cp = seq(from = 0.001,to = 0.1,by = 0.001),minsplit = c(10,20,30,50,100),minbucket = c(20,10,5),maxdepth = c(10,15,30))
+# set.seed(617)
+# cvModel14 = train(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,
+#                 data=train_s,
+#                 method="rpart",
+#                 trControl = trControl,
+#                 tuneGrid = tuneGrid)
+# 
+# model13 = rpart(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data=train_s,cp = cvModel13$bestTune$cp)
+# summary(model13)
+# # train
+# pred13 <- predict(model13)
+# rmse13 <- sqrt(mean((pred13-train_s$rating)^2))
+# # test
+# pred13_test <- predict(model13,newdata=test_s)
+# rmse13_test <- sqrt(mean((pred13_test-test_s$rating)^2))
+
+
+# bagging 
+library(ipred)
+set.seed(15) 
+model14 = bagging(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,
+              data = train_s, 
+              nbagg = 1000)
+
+summary(model14)
+# train
+pred14 <- predict(model14)
+rmse14 <- sqrt(mean((pred14-train_s$rating)^2))
+# test
+pred14_test <- predict(model14,newdata=test_s)
+rmse14_test <- sqrt(mean((pred14_test-test_s$rating)^2))
+
+
+# bagging using random forests
+library(randomForest)
+set.seed(15)
+model15 = randomForest(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,
+              data = train_s, 
+              mtry= ncol(train_s)-1,ntree=1000)
+summary(model15)
+# train
+pred15 <- predict(model15)
+rmse15 <- sqrt(mean((pred15-train_s$rating)^2))
+# test
+pred15_test <- predict(model15,newdata=test_s)
+rmse15_test <- sqrt(mean((pred15_test-test_s$rating)^2))
+
+# random forest model
+set.seed(15)
+model16 = randomForest(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,
+              data = train_s, 
+              ,ntree=1000)
+summary(model16)
+# train
+pred16 <- predict(model16)
+rmse16 <- sqrt(mean((pred16-train_s$rating)^2))
+# test
+pred16_test <- predict(model16,newdata=test_s)
+rmse16_test <- sqrt(mean((pred16_test-test_s$rating)^2))
+
+# tuned Random forest model
+
+trControl=trainControl(method="cv",number=5)
+tuneGrid = expand.grid(mtry=1:10)
+set.seed(15)
+cvModel17 = train(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data=train_s,
+                 method="rf",ntree=500,trControl=trControl,tuneGrid=tuneGrid )
+
+model17 = randomForest(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data=train_s,ntree = 500,mtry=cvModel17$bestTune$mtry)
+summary(model17)
+# train
+pred17 <- predict(model17)
+rmse17 <- sqrt(mean((pred17-train_s$rating)^2))
+# test
+pred17_test <- predict(model17,newdata=test_s)
+rmse17_test <- sqrt(mean((pred17_test-test_s$rating)^2))
+
+# forest with ranger
+library(ranger)
+model18 = ranger(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data=train_s,num.trees = 1000)
+summary(model18)
+# train
+pred18 <- predict(model18,data=train_s,num.trees=1000)
+rmse18 <- sqrt(mean((pred18$predictions-train_s$rating)^2))
+# test
+pred18_test <- predict(model18,data=test_s,num.trees=1000)
+rmse18_test <- sqrt(mean((pred18_test$predictions-test_s$rating)^2))
+
+
+# tuned forest ranger
+trControl=trainControl(method="cv",number=5)
+tuneGrid = expand.grid(mtry=1:4, 
+                       splitrule = c('variance','extratrees','maxstat'), 
+                       min.node.size = c(2,5,10,15,20,25))
+cvModel19 = train(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,
+                data=train_s,
+                method="ranger",
+                num.trees=200,
+                trControl=trControl,
+                tuneGrid=tuneGrid )
+
+
+set.seed(15)
+model19 = ranger(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data=train_s,num.trees = 200,mtry=cvModel19$bestTune$mtry, 
+                          min.node.size = cvModel19$bestTune$min.node.size, 
+                          splitrule = cvModel19$bestTune$splitrule)
+summary(model19)
+# train
+pred19 <- predict(model19,data=train_s,num.trees=200)
+rmse19 <- sqrt(mean((pred19$predictions-train_s$rating)^2))
+# test
+pred19_test <- predict(model19,data=test_s,num.trees=200)
+rmse19_test <- sqrt(mean((pred19_test$predictions-test_s$rating)^2))
+
+
+# boosting models
+# gbm
+library(gbm)
+set.seed(15)
+model20 = gbm(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,
+            data=train_s,
+            distribution="gaussian",
+            n.trees = 200,
+            interaction.depth = 2,
+            shrinkage = 0.01)
+
+
+summary(model20)
+# train
+pred20 <- predict(model20,n.trees=200)
+rmse20 <- sqrt(mean((pred20-train_s$rating)^2))
+# test
+pred20_test <- predict(model20,newdata=test_s,n.trees=200)
+rmse20_test <- sqrt(mean((pred20_test-test_s$rating)^2))
+
+
+# xgboost
+library(vtreat)
+trt = designTreatmentsZ(dframe = train_s,
+                        varlist = names(train_s)[c(3,5:16,18:28)])
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+
+train_input = prepare(treatmentplan = trt, 
+                      dframe = train_s,
+                      varRestriction = newvars)
+test_input = prepare(treatmentplan = trt, 
+                     dframe = test_s,
+                     varRestriction = newvars)
+main_tes = prepare(treatmentplan = trt,dframe=test_data)
+head(train_input)
+
+library(xgboost); library(caret)
+set.seed(15)
+tune_nrounds21 = xgb.cv(data=as.matrix(train_input), 
+                      label = train_s$rating,
+                      nrounds=250,
+                      nfold = 5,
+                      verbose = 0)
+
+which.min(tune_nrounds$evaluation_log$test_rmse_mean)
+
+model21= xgboost(data=as.matrix(train_input), 
+                  label = train_s$rating,
+                  nrounds=11, # after tuned rounds
+                  verbose = 0)
+summary(model21)
+# train
+pred21 <- predict(model21,newdata = as.matrix(train_input))
+rmse21 <- sqrt(mean((pred21-train_s$rating)^2))
+# test
+pred21_test <- predict(model21,newdata=as.matrix(test_input))
+rmse21_test <- sqrt(mean((pred21_test-test_s$rating)^2))
+
+
+# tuned forest ranger with incresed trees
+trControl=trainControl(method="cv",number=5)
+tuneGrid = expand.grid(mtry=1:4, 
+                       splitrule = c('variance','extratrees','maxstat'), 
+                       min.node.size = c(2,5,10,15,20,25))
+cvModel22 = train(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,
+                data=train_s,
+                method="ranger",
+                num.trees=2000,
+                trControl=trControl,
+                tuneGrid=tuneGrid )
+
+
+set.seed(15)
+model22 = ranger(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data=train_s,num.trees = 2000,mtry=cvModel22$bestTune$mtry, 
+                          min.node.size = cvModel22$bestTune$min.node.size, 
+                          splitrule = cvModel22$bestTune$splitrule)
+summary(model22)
+# train
+pred22 <- predict(model22,data=train_s,num.trees=2000)
+rmse22 <- sqrt(mean((pred22$predictions-train_s$rating)^2))
+# test
+pred22_test <- predict(model22,data=test_s,num.trees=2000)
+rmse22_test <- sqrt(mean((pred22_test$predictions-test_s$rating)^2))
+
+
+# tuned ranger with more parameters
+
+trControl=trainControl(method="cv",number=5)
+tuneGrid = expand.grid(mtry=1:10, 
+                       splitrule = c('variance','extratrees','maxstat'), 
+                       min.node.size = c(1,2,5,10,15,20,25))
+cvModel23 = train(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,
+                data=train_s,
+                method="ranger",
+                num.trees=2000,
+                trControl=trControl,
+                tuneGrid=tuneGrid )
+
+
+set.seed(15)
+model23 = ranger(rating~track_duration+ danceability+ energy+ key+ mode + track_explicit + loudness+speechiness+acousticness+instrumentalness+liveness+valence+tempo+time_signature+pop+rock+mellow_gold+soul+rap+soft_rock+adult_standards+country+dance_pop+brill_building_pop+hip_hop,data=train_s,num.trees = 2000,mtry=cvModel23$bestTune$mtry, 
+                          min.node.size = cvModel23$bestTune$min.node.size, 
+                          splitrule = cvModel23$bestTune$splitrule)
+summary(model23)
+# train
+pred23 <- predict(model23,data=train_s,num.trees=2000)
+rmse23 <- sqrt(mean((pred23$predictions-train_s$rating)^2))
+# test
+pred23_test <- predict(model23,data=test_s,num.trees=2000)
+rmse23_test <- sqrt(mean((pred23_test$predictions-test_s$rating)^2))
+
+```
+
+# visualise models
+
+how all the models performed
+
+```{r}
+summary_reg <- data.frame(Name = c("Regression","forward_model","Backward_model","stepwise_model","gam","lasso","Decision_tree","tree_1","tree_2","tree_3","tree_4","tree_para_mix","tuned_tree","Bagging_ipred","Bagging_rf","rf","tuned_rf","rf_ranger","tuned_rf_ranger","boosting_gbm","Xgboost","Tuned_rf_pro","tuned_rf_pro_max"),rmse_train = c(rmse1,rmse2,rmse3,rmse4,rmse5,rmse6,rmse7,rmse8,rmse9,rmse10,rmse11,rmse12,rmse13,rmse14,rmse15,rmse16,rmse17,rmse18,rmse19,rmse20,rmse21,rmse22,rmse23), rmse_test = c(rmse1_test,rmse2_test,rmse3_test,rmse4_test,rmse5_test,rmse6_test,rmse7_test,rmse8_test,rmse9_test,rmse10_test,rmse11_test,rmse12_test,rmse13_test,rmse14_test,rmse15_test,rmse16_test,rmse17_test,rmse18_test,rmse19_test,rmse20_test,rmse21_test,rmse22_test,rmse23_test) )
+summary_reg
+
+
+gather(data=summary_reg,key = "rmse", value= "score", -Name) |> ggplot(aes(x=Name,y=score)) + geom_point() + facet_wrap(~rmse,ncol=1) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+# Main test data predictions
+
+all the models predictions with the main test data
+```{r}
+pred1_test_main <- predict(model1,newdata = test_data)
+pred2_test_main <- predict(model2,newdata = test_data)
+pred3_test_main <- predict(model3,newdata = test_data)
+pred4_test_main <- predict(model4,newdata = test_data)
+pred5_test_main <- predict(model5,newdata = test_data)
+pred6_test_main <- predict(model6,newdata = test_data)
+pred7_test_main <- predict(model7,newdata = test_data)
+pred8_test_main <- predict(model8,newdata = test_data)
+pred9_test_main <- predict(model9,newdata = test_data)
+pred10_test_main <- predict(model10,newdata = test_data)
+pred11_test_main <- predict(model11,newdata = test_data)
+pred12_test_main <- predict(model12,newdata = test_data)
+pred13_test_main <- predict(model13,newdata = test_data)
+pred14_test_main <- predict(model14,newdata = test_data)
+pred15_test_main <- predict(model15,newdata = test_data)
+pred16_test_main <- predict(model16,newdata = test_data)
+pred17_test_main <- predict(model17,newdata = test_data)
+pred18_test_main <- predict(model18,data = test_data,num.trees=1000)
+pred19_test_main <- predict(model19,data = test_data,num.trees=200)
+pred20_test_main <- predict(model20,newdata = test_data)
+pred21_test_main <- predict(model21,newdata = as.matrix(main_tes))
+pred22_test_main <- predict(model22,data = test_data,num.trees=2000)
+pred23_test_main <- predict(model23,data = test_data,num.trees = 2000)
+
+
+
+
+
+```
+
+
+
+# submissions
+
+better to comment out this section as it will only run in my local laptop
+
+```{r}
+# Submission 1
+submissionFile = data.frame(id = test_data$id, rating = pred1_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model1.csv',row.names = F)
+
+# Submission 2
+submissionFile = data.frame(id = test_data$id, rating = pred2_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model2.csv',row.names = F)
+
+# Submission 3
+submissionFile = data.frame(id = test_data$id, rating = pred3_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model3.csv',row.names = F)
+
+# Submission 4
+submissionFile = data.frame(id = test_data$id, rating = pred4_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model4.csv',row.names = F)
+
+# Submission 5
+submissionFile = data.frame(id = test_data$id, rating = pred5_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model5.csv',row.names = F)
+
+# Submission 6
+submissionFile = data.frame(id = test_data$id, rating = pred6_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model6.csv',row.names = F)
+
+# Submission 7
+submissionFile = data.frame(id = test_data$id, rating = pred7_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model7.csv',row.names = F)
+
+# Submission 8
+submissionFile = data.frame(id = test_data$id, rating = pred8_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model8.csv',row.names = F)
+
+# Submission 9
+submissionFile = data.frame(id = test_data$id, rating = pred9_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model9.csv',row.names = F)
+
+# Submission 10
+submissionFile = data.frame(id = test_data$id, rating = pred10_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model10.csv',row.names = F)
+
+# Submission 11
+submissionFile = data.frame(id = test_data$id, rating = pred11_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model11.csv',row.names = F)
+
+# Submission 12
+submissionFile = data.frame(id = test_data$id, rating = pred12_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model12.csv',row.names = F)
+
+# Submission 13
+submissionFile = data.frame(id = test_data$id, rating = pred13_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model13.csv',row.names = F)
+
+# Submission 14
+submissionFile = data.frame(id = test_data$id, rating = pred14_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model14.csv',row.names = F)
+
+# Submission 15
+submissionFile = data.frame(id = test_data$id, rating = pred15_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model15.csv',row.names = F)
+
+# Submission 16
+submissionFile = data.frame(id = test_data$id, rating = pred16_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model16.csv',row.names = F)
+
+# Submission 17
+submissionFile = data.frame(id = test_data$id, rating = pred17_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model17.csv',row.names = F)
+
+# Submission 18
+submissionFile = data.frame(id = test_data$id, rating = pred18_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model18.csv',row.names = F)
+
+# Submission 19
+submissionFile = data.frame(id = test_data$id, rating = pred19_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model19.csv',row.names = F)
+
+# Submission 20
+submissionFile = data.frame(id = test_data$id, rating = pred20_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model20.csv',row.names = F)
+
+# Submission 21
+submissionFile = data.frame(id = test_data$id, rating = pred21_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model21.csv',row.names = F)
+
+# Submission 22
+submissionFile = data.frame(id = test_data$id, rating = pred22_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model22.csv',row.names = F)
+
+# Submission 23
+submissionFile = data.frame(id = test_data$id, rating = pred23_test_main)
+write.csv(submissionFile, '/Users/ishujaswani/downloads/model23.csv',row.names = F)
+
+```
+
